@@ -15,6 +15,7 @@
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #endif
+#include <optional>
 
 SDL_Window* window;
 SDL_Renderer* renderer;
@@ -85,7 +86,7 @@ public:
 		const int right_edge = (w - grid_size * width) / 2;
 		SDL_Rect rect{ right_edge, h - 2 * (grid_size - padding), grid_size - padding, grid_size - padding };
 
-		for (int i = 0; i < data.size(); i++)
+		for (std::size_t i = 0; i < data.size(); i++)
 		{
 			if (i != 0)
 			{
@@ -113,7 +114,7 @@ public:
 	{
 		for (const auto& p : piece.get_world_parts())
 		{
-			int index = p.y * width + p.x;
+			std::size_t index = p.y * width + p.x;
 			if (index >= data.size())
 			{
 				break;
@@ -126,36 +127,62 @@ public:
 class GameMode : Actor
 {
 public:
+	void choose_new_piece()
+	{
+		// Makes a copy to adjust world location on the member variable.
+		//player_piece = pieces[rand() % pieces.size()];
+		player_piece = pieces[0];
+
+		// Move to the top of the board.
+		player_piece.value().location.y = Board::height;
+	}
+
 	void tick(float delta_time)
 	{
-		static auto my_piece = pieces[0];
+		if (!player_piece.has_value())
+		{
+			return;
+		}
+		auto& my_piece = player_piece.value();
 
 		// Reset previous piece state.
 		board->stamp_values(my_piece, false);
 
-		// Move down and loop back to top.
-		my_piece.location.y--;
+		// Fall automatically after a repeat delay.
+		current_fall_time += delta_time;
+		if (current_fall_time > fall_delay)
+		{
+			current_fall_time = 0.F;
+			my_piece.location.y--;
+		}
+
+		const Uint8* state = SDL_GetKeyboardState(nullptr);
+		if (state[SDL_SCANCODE_DOWN] == 1)
+		{
+			// Drop lower if user holding down key.
+			my_piece.location.y--;
+		}
+		/*if (state[SDL_SCANCODE_RIGHT] == 1 && state[SDL_SCANCODE_LEFT] == 1)
+		{
+			std::cout << "Right and Up Keys Pressed." << std::endl;
+		}*/
+
 		if (my_piece.location.y < 0)
 		{
-			my_piece.location.y = Board::height;
+			// Invalid the piece if off screen (temporary)
+			player_piece.reset();
 		}
 
 		// Set new state on board.
 		board->stamp_values(my_piece, true);
-
-		const Uint8* state = SDL_GetKeyboardState(nullptr);
-		if (state[SDL_SCANCODE_RETURN] == 1)
-		{
-			std::cout << "<RETURN> is pressed. delta time: " << delta_time << std::endl;
-		}
-		if (state[SDL_SCANCODE_RIGHT] == 1 && state[SDL_SCANCODE_UP] == 1)
-		{
-			std::cout << "Right and Up Keys Pressed." << std::endl;
-		}
 	}
+
+	std::optional<Piece> player_piece;
+	float current_fall_time;
+	constexpr const static float fall_delay = 0.2;
 };
 
-void render_func()
+void main_loop()
 {
 	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 	SDL_RenderClear(renderer);
@@ -189,9 +216,10 @@ int main(int argc, char* argv[])
 
 		board = std::make_unique<Board>();
 		game_mode = std::make_unique<GameMode>();
+		game_mode->choose_new_piece();
 
 #ifdef EMSCRIPTEN
-		emscripten_set_main_loop(render_func, fps, true);
+		emscripten_set_main_loop(main_loop, fps, true);
 #else // normal SDL
 		SDL_Event event;
 		bool wants_to_quit = false;
@@ -204,11 +232,8 @@ int main(int argc, char* argv[])
 					wants_to_quit = true;
 				}
 			}
-			render_func();
-			if (fps <= 0)
-			{
-				throw std::runtime_error("fps must be greater than zero");
-			}
+			main_loop();
+			static_assert(fps > 0, "fps must be greater than zero");
 			SDL_Delay(1000 / fps); // assume 60fps
 		}
 #endif
