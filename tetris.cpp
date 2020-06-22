@@ -35,10 +35,8 @@ public:
     data[33] = true;
   }
 
-  void tick(float delta_time) { print(); }
-
-  void print()
-  {
+  void tick(float delta_time)
+  { 
     const int grid_size = 20, padding = 2;
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
