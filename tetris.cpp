@@ -36,7 +36,7 @@ public:
 
         int w, h;
         SDL_GetWindowSize(window, &w, &h);
-        const int right_edge = h / 2;
+        const int right_edge = (w - grid_size * width) / 2;
         SDL_Rect rect{right_edge, h - 2 * (grid_size - padding), grid_size - padding, grid_size - padding};
 
         for (int i = 0; i < data.size(); i++)
