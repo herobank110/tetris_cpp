@@ -33,7 +33,7 @@ struct Piece
 {
 	Piece(std::initializer_list<Location>&& t)
 		: parts{ std::move(t) }
-		
+
 	{
 		location = Location{ 0, 0 };
 	}
@@ -51,7 +51,7 @@ struct Piece
 	Location location;
 };
 
-const std::array pieces {
+const std::array pieces{
 	Piece{{ { 0, 0 }, { 0, 1 }, { 0, 2 }, {0, 3} }},
 	Piece{{ { 0, 0 }, { 1, 0 }, { 1, 1 }, { 2, 1 } }}
 };
@@ -110,18 +110,36 @@ public:
 		}
 	}
 
-	void stamp_values(const Piece& piece, const bool new_val)
+	void stamp_values(const Piece& piece, const bool new_value)
 	{
 		for (const auto& p : piece.get_world_parts())
 		{
-			std::size_t index = p.y * width + p.x;
-			if (index >= data.size())
-			{
-				break;
-			}
-			data[index] = new_val;
+			set_value_at(p, new_value);
 		}
 	};
+
+	std::size_t location_to_index(const Location& loc) const { return loc.y * width + loc.x; }
+
+	std::optional<bool> get_value_at(const Location& world_location) const
+	{
+		if (auto index = location_to_index(world_location);
+			index < data.size())
+		{
+			return data[index];
+		}
+		return {};
+	}
+
+	bool set_value_at(const Location& world_location, const bool new_value)
+	{
+		auto index = location_to_index(world_location);
+		if (index < data.size())
+		{
+			data[index] = new_value;
+			return true;
+		}
+		return false;
+	}
 };
 
 class GameMode : Actor
@@ -137,49 +155,79 @@ public:
 		player_piece.value().location.y = Board::height;
 	}
 
-	void tick(float delta_time)
+	void tick_new_piece(float delta_time)
 	{
-		if (!player_piece.has_value())
+		current_new_piece_time += delta_time;
+		if (current_new_piece_time > new_piece_delay)
 		{
-			return;
+			current_new_piece_time = 0.F;
+			choose_new_piece();
 		}
-		auto& my_piece = player_piece.value();
+	}
+
+	void tick_current_piece(float delta_time)
+	{
+		auto& piece = player_piece.value();
+		auto last_piece = player_piece.value();
 
 		// Reset previous piece state.
-		board->stamp_values(my_piece, false);
+		board->stamp_values(piece, false);
 
 		// Fall automatically after a repeat delay.
 		current_fall_time += delta_time;
 		if (current_fall_time > fall_delay)
 		{
 			current_fall_time = 0.F;
-			my_piece.location.y--;
+			piece.location.y--;
 		}
 
 		const Uint8* state = SDL_GetKeyboardState(nullptr);
 		if (state[SDL_SCANCODE_DOWN] == 1)
 		{
 			// Drop lower if user holding down key.
-			my_piece.location.y--;
+			piece.location.y--;
 		}
+		// TODO: Piece rotation
 		/*if (state[SDL_SCANCODE_RIGHT] == 1 && state[SDL_SCANCODE_LEFT] == 1)
 		{
 			std::cout << "Right and Up Keys Pressed." << std::endl;
 		}*/
 
-		if (my_piece.location.y < 0)
+		// Check any pieces would touch already active points.
+		for (const auto& p : piece.get_world_parts())
 		{
-			// Invalid the piece if off screen (temporary)
-			player_piece.reset();
+			if (p.y < 0 || board->get_value_at(p).value_or(false))
+			{
+				// Confirm the piece on the board.
+				player_piece.reset();
+				board->stamp_values(last_piece, true);
+				return;
+			}
 		}
 
 		// Set new state on board.
-		board->stamp_values(my_piece, true);
+		board->stamp_values(piece, true);
+	}
+
+	void tick(float delta_time)
+	{
+		if (!player_piece.has_value())
+		{
+			// Try to give the player a new piece.
+			tick_new_piece(delta_time);
+		}
+		else
+		{
+			// Otherwise move the current piece.
+			tick_current_piece(delta_time);
+		}
 	}
 
 	std::optional<Piece> player_piece;
 	float current_fall_time;
+	float current_new_piece_time;
 	constexpr const static float fall_delay = 0.2;
+	constexpr const static float new_piece_delay = 0.5;
 };
 
 void main_loop()
