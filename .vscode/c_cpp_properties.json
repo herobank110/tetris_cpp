@@ -5,8 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${vcpkgRoot}/x86-windows/include",
-                "G:/Program Source/emscripten/upstream/emscripten/system/include",
-                "C:/Users/David/.emscripten_cache/wasm/include"
+                "G:/Program Source/emscripten/upstream/emscripten/system/include"
             ],
             "defines": [
                 "_DEBUG",
