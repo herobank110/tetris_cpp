@@ -6,6 +6,7 @@
 
 #include <array>
 #include <chrono>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <SDL2/SDL.h>
@@ -19,9 +20,40 @@ SDL_Window* window;
 SDL_Renderer* renderer;
 std::unique_ptr<class Board> board;
 std::unique_ptr<class GameMode> game_mode;
+constexpr const int fps = 12;
 
-struct Point { float x, y; };
-std::array pieces{1, 2, 3};
+struct Location {
+	int x = 0, y = 0;
+	Location() = default;
+	Location(int x, int y) : x(x), y(y) {};
+};
+
+struct Piece
+{
+	Piece(std::initializer_list<Location>&& t)
+		: parts{ std::move(t) }
+		
+	{
+		location = Location{ 0, 0 };
+	}
+
+	[[nodiscard]] auto get_world_parts() const {
+		std::vector<Location> vec;
+		for (const auto& p : parts)
+		{
+			vec.emplace_back(p.x + location.x, p.y + location.y);
+		}
+		return vec;
+	}
+
+	std::vector<Location> parts;
+	Location location;
+};
+
+const std::array pieces {
+	Piece{{ { 0, 0 }, { 0, 1 }, { 0, 2 }, {0, 3} }},
+	Piece{{ { 0, 0 }, { 1, 0 }, { 1, 1 }, { 2, 1 } }}
+};
 
 class Actor
 {
@@ -31,20 +63,15 @@ public:
 
 class Board : Actor
 {
+public:
 	constexpr static const int width = 10;
 	constexpr static const int height = 21;
 	std::vector<bool> data;
 
-public:
 	Board()
 	{
 		data.reserve(width * height);
 		data.assign(width * height, false);
-
-		data[0] = true;
-		data[11] = true;
-		data[22] = true;
-		data[33] = true;
 	}
 
 	void tick(float delta_time)
@@ -81,6 +108,19 @@ public:
 			}
 		}
 	}
+
+	void stamp_values(const Piece& piece, const bool new_val)
+	{
+		for (const auto& p : piece.get_world_parts())
+		{
+			int index = p.y * width + p.x;
+			if (index >= data.size())
+			{
+				break;
+			}
+			data[index] = new_val;
+		}
+	};
 };
 
 class GameMode : Actor
@@ -88,6 +128,21 @@ class GameMode : Actor
 public:
 	void tick(float delta_time)
 	{
+		static auto my_piece = pieces[0];
+
+		// Reset previous piece state.
+		board->stamp_values(my_piece, false);
+
+		// Move down and loop back to top.
+		my_piece.location.y--;
+		if (my_piece.location.y < 0)
+		{
+			my_piece.location.y = Board::height;
+		}
+
+		// Set new state on board.
+		board->stamp_values(my_piece, true);
+
 		const Uint8* state = SDL_GetKeyboardState(nullptr);
 		if (state[SDL_SCANCODE_RETURN] == 1)
 		{
@@ -129,13 +184,14 @@ int main(int argc, char* argv[])
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) == 0)
 	{
-		SDL_CreateWindowAndRenderer(800, 600, 0, &window, &renderer);
+		static const Location window_size{ 800, 600 };
+		SDL_CreateWindowAndRenderer(window_size.x, window_size.y, 0, &window, &renderer);
 
 		board = std::make_unique<Board>();
 		game_mode = std::make_unique<GameMode>();
 
 #ifdef EMSCRIPTEN
-		emscripten_set_main_loop(render_func, 0, true);
+		emscripten_set_main_loop(render_func, fps, true);
 #else // normal SDL
 		SDL_Event event;
 		bool wants_to_quit = false;
@@ -149,7 +205,11 @@ int main(int argc, char* argv[])
 				}
 			}
 			render_func();
-			SDL_Delay(1000 / 60); // assume 60fps
+			if (fps <= 0)
+			{
+				throw std::runtime_error("fps must be greater than zero");
+			}
+			SDL_Delay(1000 / fps); // assume 60fps
 		}
 #endif
 
