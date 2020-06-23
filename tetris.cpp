@@ -18,10 +18,10 @@
 #endif
 #include "tetris.hpp"
 
-static const int fps = 30;
+static const int fps = 20;
 static const Location window_size{800, 600};
 static const Color background_color{255};
-static const Color foreground_color{0};
+static const Color foreground_color{113, 150, 107};
 static const std::array pieces{Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
                                Piece{{{0, 0}, {1, 0}, {1, 1}, {2, 1}}}};
 
@@ -55,8 +55,9 @@ public:
     int screen_h;
     SDL_GetWindowSize(window, &screen_w, &screen_h);
     const int right_edge = (screen_w - grid_size * width) / 2;
-    SDL_Rect rect{right_edge, screen_h - 2 * (grid_size - padding),
-                  grid_size - padding, grid_size - padding};
+    const int bottom_edge = screen_h - right_edge / 2 + 40;
+    SDL_Rect rect{right_edge, bottom_edge, grid_size - padding,
+                  -(grid_size - padding * 2)};
 
     for (std::size_t i = 0; i < data.size(); i++)
     {
@@ -73,13 +74,22 @@ public:
 
       if (data[i])
       {
+        rect.h--;
         SDL_RenderFillRect(renderer, &rect);
+        rect.h++;
       }
       else
       {
         SDL_RenderDrawRect(renderer, &rect);
       }
     }
+
+    // Draw a border around the grid.
+    rect.x = right_edge - margin;
+    rect.y = bottom_edge + margin;
+    rect.w = grid_size * Board::width + margin * 2 - padding;
+    rect.h = -(grid_size * Board::height + margin * 2 - padding * 2);
+    SDL_RenderDrawRect(renderer, &rect);
   }
 
   void stamp_values(const Piece &piece, const bool new_value)
@@ -106,7 +116,8 @@ public:
     return {};
   }
 
-  auto set_value_at(const Location &world_location, const bool new_value) -> bool
+  auto set_value_at(const Location &world_location, const bool new_value)
+      -> bool
   {
     auto index = location_to_index(world_location);
     if (index < data.size())
@@ -119,8 +130,9 @@ public:
 
   constexpr static const int width = 10;
   constexpr static const int height = 21;
-  constexpr static const int grid_size = 20;
+  constexpr static const int grid_size = 22;
   constexpr static const int padding = 2;
+  constexpr static const int margin = 4;
   std::vector<bool> data;
 };
 
@@ -206,15 +218,15 @@ public:
 
   void tick(float delta_time)
   {
-    if (!player_piece.has_value())
-    {
-      // Try to give the player a new piece.
-      tick_new_piece(delta_time);
-    }
-    else
+    if (player_piece.has_value())
     {
       // Otherwise move the current piece.
       tick_current_piece(delta_time);
+    }
+    else
+    {
+      // Try to give the player a new piece.
+      tick_new_piece(delta_time);
     }
   }
 
