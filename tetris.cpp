@@ -1,8 +1,8 @@
 // Tetris game with SDL2 for desktop and emscripten.
 // Controls:
 //    Down Arrow - Move Down
-//    Left Arrow - Rotate Left
-//    Right Arrow - Rotate Right
+//    Left Arrow - Move Left
+//    Right Arrow - Move Right
 
 #include <array>
 #include <chrono>
@@ -168,7 +168,6 @@ public:
 	void tick_current_piece(float delta_time)
 	{
 		auto& piece = player_piece.value();
-		auto last_piece = player_piece.value();
 
 		// Reset previous piece state.
 		board->stamp_values(piece, false);
@@ -188,21 +187,40 @@ public:
 			piece.location.y--;
 		}
 		// TODO: Piece rotation
-		/*if (state[SDL_SCANCODE_RIGHT] == 1 && state[SDL_SCANCODE_LEFT] == 1)
+		if (piece.location.x > 0 && state[SDL_SCANCODE_LEFT] == 1)
 		{
-			std::cout << "Right and Up Keys Pressed." << std::endl;
-		}*/
+			piece.location.x--;
+		}
+		else if (piece.location.x < Board::width - 1 && state[SDL_SCANCODE_RIGHT] == 1)
+		{
+			piece.location.x++;
+		}
 
 		// Check any pieces would touch already active points.
-		for (const auto& p : piece.get_world_parts())
+		auto has_collision = [&]
 		{
-			if (p.y < 0 || board->get_value_at(p).value_or(false))
+			for (const auto& p : piece.get_world_parts())
 			{
-				// Confirm the piece on the board.
-				player_piece.reset();
-				board->stamp_values(last_piece, true);
-				return;
+				if (p.y < 0 || board->get_value_at(p).value_or(false))
+				{
+					return true;
+				}
 			}
+			return false;
+		};
+		if (has_collision())
+		{
+			// This time landed on an occupied spot.
+
+			// Go back to the last safe spot. Could be multiple
+			// steps as multiple down moves are allowed per tick.
+			while (has_collision())
+			{
+				piece.location.y++;
+			}
+
+			board->stamp_values(piece, true);
+			player_piece.reset();
 		}
 
 		// Set new state on board.
