@@ -216,8 +216,36 @@ public:
     board->stamp_values(piece, true);
   }
 
+  auto can_end_match() const -> bool
+  {
+    // End game if anything on the 4th row down is occupied.
+    // I don't know if this is part of the official rules.
+
+    Location loc{0, Board::height - 4};
+    for (int i = 0; i < Board::width; i++)
+    {
+      if (board->get_value_at(loc).value_or(false))
+      {
+        // A spot is occupied, so we can end the game.
+        return true;
+      }
+    }
+    // Nothing on this row was occupied, so continue play.
+    return false;
+  }
+
   void tick(float delta_time)
   {
+    if (is_match_over)
+    {
+      return;
+    }
+    if (can_end_match())
+    {
+      is_match_over = true;
+      return;
+    }
+
     if (player_piece.has_value())
     {
       // Otherwise move the current piece.
@@ -230,11 +258,12 @@ public:
     }
   }
 
-  std::optional<Piece> player_piece;
-  float current_fall_time = 0.F;
-  float current_new_piece_time = 0.F;
   constexpr const static float fall_delay = 1.F;
   constexpr const static float new_piece_delay = 1.5F;
+  float current_fall_time = 0.F;
+  float current_new_piece_time = 0.F;
+  std::optional<Piece> player_piece;
+  bool is_match_over = false;
 };
 
 [[nodiscard]] auto Piece::has_collision() const -> bool
