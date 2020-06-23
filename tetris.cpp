@@ -153,6 +153,29 @@ public:
 
 		// Move to the top of the board.
 		player_piece.value().location.y = Board::height;
+
+		// Shift down until not colliding.
+		while (has_collision(player_piece.value()))
+		{
+			player_piece.value().location.y--;
+		}
+	}
+
+	bool has_collision(const Piece& piece)
+	{
+		auto parts = piece.get_world_parts();
+		return !std::all_of(parts.begin(), parts.end(),
+			[](const Location& loc)
+			{
+				return
+					// Ensure the piece is within the board bounds.
+					0 <= loc.x && loc.x < Board::width
+					&& 0 <= loc.y && loc.y < Board::height
+
+					// Ensure the spot isn't occupied.
+					&& !(board->get_value_at(loc).value_or(false));
+			}
+		);
 	}
 
 	void tick_new_piece(float delta_time)
@@ -169,56 +192,73 @@ public:
 	{
 		auto& piece = player_piece.value();
 
+		// Adjust location and revert if collision would occur.
+		auto add_offset = [&](int dx, int dy)
+		{
+			const int sweep_x = dx < 0 ? -1 : dx > 0 ? 1 : 0;
+			const int sweep_y = dy < 0 ? -1 : dy > 0 ? 1 : 0;
+
+			// Sweep to the ending location.
+			while (!(dx == 0 && dy == 0))
+			{
+				if (sweep_x != 0)
+				{
+					piece.location.x += sweep_x;
+					if (has_collision(piece))
+					{
+						piece.location.x -= sweep_x;
+						return false;
+					}
+					dx -= sweep_x;
+				}
+
+				if (sweep_y != 0)
+				{
+					piece.location.y += sweep_y;
+					if (has_collision(piece))
+					{
+						piece.location.y -= sweep_y;
+						return false;
+					}
+					dy -= sweep_y;
+				}
+			}
+			return true;
+		};
+
 		// Reset previous piece state.
 		board->stamp_values(piece, false);
 
+		bool has_landed = false;
 		// Fall automatically after a repeat delay.
 		current_fall_time += delta_time;
 		if (current_fall_time > fall_delay)
 		{
 			current_fall_time = 0.F;
-			piece.location.y--;
+			has_landed = has_landed || !add_offset(0, -1);
 		}
 
 		const Uint8* state = SDL_GetKeyboardState(nullptr);
 		if (state[SDL_SCANCODE_DOWN] == 1)
 		{
 			// Drop lower if user holding down key.
-			piece.location.y--;
+			has_landed = has_landed || !add_offset(0, -1);
 		}
-		// TODO: Piece rotation
 		if (piece.location.x > 0 && state[SDL_SCANCODE_LEFT] == 1)
 		{
-			piece.location.x--;
+			add_offset(-1, 0);
 		}
 		else if (piece.location.x < Board::width - 1 && state[SDL_SCANCODE_RIGHT] == 1)
 		{
-			piece.location.x++;
+			add_offset(1, 0);
 		}
+		// TODO: Piece rotation
 
-		// Check any pieces would touch already active points.
-		auto has_collision = [&]
+		if (has_landed)
 		{
-			for (const auto& p : piece.get_world_parts())
-			{
-				if (p.y < 0 || board->get_value_at(p).value_or(false))
-				{
-					return true;
-				}
-			}
-			return false;
-		};
-		if (has_collision())
-		{
-			// This time landed on an occupied spot.
+			// This time the player landed on an occupied spot.
 
-			// Go back to the last safe spot. Could be multiple
-			// steps as multiple down moves are allowed per tick.
-			while (has_collision())
-			{
-				piece.location.y++;
-			}
-
+			// Set final state on board.
 			board->stamp_values(piece, true);
 			player_piece.reset();
 		}
@@ -242,8 +282,8 @@ public:
 	}
 
 	std::optional<Piece> player_piece;
-	float current_fall_time;
-	float current_new_piece_time;
+	float current_fall_time = 0.F;
+	float current_new_piece_time = 0.F;
 	constexpr const static float fall_delay = 0.2;
 	constexpr const static float new_piece_delay = 0.5;
 };
