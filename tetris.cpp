@@ -25,7 +25,6 @@ static const SDL_Color background_color{ 255, 255, 255, 255 };
 static const SDL_Color foreground_color{ 113, 150, 107, 255 };
 static const SDL_Color foreground_color_alt{ 150, 113, 97, 255 };
 static const std::array pieces{
-  Piece{ { { 0, 0 } } },
   Piece{ { { 0, 0 }, { 0, 1 }, { 1, 1 }, { 0, 2 } } },
   Piece{ { { 0, 0 }, { 1, 0 }, { 1, -1 }, { 2, -1 } } },
   Piece{ { { 0, 0 }, { 0, 1 }, { 1, 0 }, { 1, 1 } } },
@@ -41,14 +40,6 @@ static std::unique_ptr<class GameMode> game_mode;
 Piece::Piece(std::initializer_list<SDL_Point>&& t) noexcept
   : parts{ std::make_shared<std::vector<SDL_Point>>(std::move(t)) }
 {}
-namespace d {
-enum class MyEnumClass
-{
-  NameName,
-  NameNameNameNameNameNameNameName,
-  NameNameNameName
-};
-}
 
 [[nodiscard]] auto Piece::get_world_parts() const
 {
@@ -154,12 +145,15 @@ auto Board::try_eliminate_rows() -> int
   // Eliminate the rows.
   if (!complete_rows.empty())
   {
-    SDL_Point loc{};
+    int shift_down = 0;
+    SDL_Point loc{ 0, 0 };
     for (const int& row_index : complete_rows)
     {
-      loc.y = row_index;
+      loc.y = row_index - shift_down;
       const auto& row_start = data.begin() + location_to_index(loc);
       data.erase(row_start, row_start + Board::width);
+      // Shift completed row indexes down considering this row was just removed.
+      shift_down++;
     }
     // Fill in erased rows at the top to match the board dimensions.
     data.resize(Board::width * Board::height, false);
