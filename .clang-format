@@ -1,8 +1,26 @@
 # Format Style Options - Created with Clang Power Tools
 ---
 Language: Cpp
-AlignAfterOpenBracket: DontAlign
-AlignEscapedNewlines: Right
+BasedOnStyle: Mozilla
+
+AlignAfterOpenBracket: AlwaysBreak
 AllowShortCaseLabelsOnASingleLine: true
-BreakBeforeBraces: Allman
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: true
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterStruct: true
+  BeforeElse: true
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+BreakBeforeBraces: Custom
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+IndentCaseLabels: false
+FixNamespaceComments: true
 ...

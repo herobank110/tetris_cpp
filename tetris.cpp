@@ -20,55 +20,68 @@
 #include "tetris.hpp"
 
 static const int fps = 20;
-static const SDL_Point window_size{800, 600};
-static const SDL_Color background_color{255, 255, 255, 255};
-static const SDL_Color foreground_color{113, 150, 107, 255};
-static const SDL_Color foreground_color_alt{150, 113, 97, 255};
-static const std::array pieces{Piece{{{0, 0}, {0, 1}, {1, 1}, {0, 2}}},
-    Piece{{{0, 0}, {1, 0}, {1, -1}, {2, -1}}},
-    Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
-    Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
-    Piece{{{0, 0}, {1, 0}, {1, 1}, {2, 1}}}};
+static const SDL_Point window_size{ 800, 600 };
+static const SDL_Color background_color{ 255, 255, 255, 255 };
+static const SDL_Color foreground_color{ 113, 150, 107, 255 };
+static const SDL_Color foreground_color_alt{ 150, 113, 97, 255 };
+static const std::array pieces{
+  Piece{ { { 0, 0 } } },
+  Piece{ { { 0, 0 }, { 0, 1 }, { 1, 1 }, { 0, 2 } } },
+  Piece{ { { 0, 0 }, { 1, 0 }, { 1, -1 }, { 2, -1 } } },
+  Piece{ { { 0, 0 }, { 0, 1 }, { 1, 0 }, { 1, 1 } } },
+  Piece{ { { 0, 0 }, { 0, 1 }, { 0, 2 }, { 0, 3 } } },
+  Piece{ { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 2, 1 } } }
+};
 
-static SDL_Window *window;
-static SDL_Renderer *renderer;
+static SDL_Window* window;
+static SDL_Renderer* renderer;
 static std::unique_ptr<class Board> board;
 static std::unique_ptr<class GameMode> game_mode;
 
-Piece::Piece(std::initializer_list<SDL_Point> &&t) noexcept
-    : parts{std::make_shared<std::vector<SDL_Point>>(std::move(t))}
+Piece::Piece(std::initializer_list<SDL_Point>&& t) noexcept
+  : parts{ std::make_shared<std::vector<SDL_Point>>(std::move(t)) }
+{}
+namespace d {
+enum class MyEnumClass
 {
+  NameName,
+  NameNameNameNameNameNameNameName,
+  NameNameNameName
+};
 }
 
 [[nodiscard]] auto Piece::get_world_parts() const
 {
   std::vector<SDL_Point> vec{};
   vec.reserve(parts->size());
-  std::transform(parts->begin(), parts->end(), std::back_inserter(vec),
-      [this](const SDL_Point &p) {
-        // Apply rotation to reference piece.
-        SDL_Point loc;
-        switch (rotation)
-        {
-        case 0: loc = {p.x, p.y}; break;
-        case 1: loc = {p.y, -p.x}; break;
-        case 2: loc = {-p.x, -p.y}; break;
-        case 3: loc = {-p.y, p.x}; break;
-        default: throw std::runtime_error("Rotation must be between 0 and 3");
-        };
+  std::transform(
+    parts->begin(),
+    parts->end(),
+    std::back_inserter(vec),
+    [this](const SDL_Point& p) {
+      // Apply rotation to reference piece.
+      SDL_Point loc;
+      switch (rotation)
+      {
+      case 0: loc = { p.x, p.y }; break;
+      case 1: loc = { p.y, -p.x }; break;
+      case 2: loc = { -p.x, -p.y }; break;
+      case 3: loc = { -p.y, p.x }; break;
+      default: throw std::runtime_error("Rotation must be between 0 and 3");
+      };
 
-        // Add world origin offset.
-        loc.x += location.x;
-        loc.y += location.y;
-        return loc;
-      });
+      // Add world origin offset.
+      loc.x += location.x;
+      loc.y += location.y;
+      return loc;
+    });
   return vec;
 }
 
 auto Piece::add_offset(SDL_Point offset) -> bool
 {
-  const SDL_Point sweep{offset.x < 0 ? -1 : offset.x > 0 ? 1 : 0,
-      offset.y < 0 ? -1 : offset.y > 0 ? 1 : 0};
+  const SDL_Point sweep{ offset.x < 0 ? -1 : offset.x > 0 ? 1 : 0,
+                         offset.y < 0 ? -1 : offset.y > 0 ? 1 : 0 };
 
   while (!(offset.x == 0 && offset.y == 0))
   {
@@ -100,14 +113,14 @@ auto Piece::add_offset(SDL_Point offset) -> bool
 [[nodiscard]] auto Piece::has_collision() const -> bool
 {
   auto parts = get_world_parts();
-  return !std::all_of(parts.begin(), parts.end(), [](const SDL_Point &loc) {
+  return !std::all_of(parts.begin(), parts.end(), [](const SDL_Point& loc) {
     return
-        // Ensure the piece is within the board bounds.
-        0 <= loc.x && loc.x < Board::width && 0 <= loc.y &&
-        loc.y < Board::height
+      // Ensure the piece is within the board bounds.
+      0 <= loc.x && loc.x < Board::width && 0 <= loc.y &&
+      loc.y < Board::height
 
-        // Ensure the spot isn't occupied.
-        && !(board->get_value_at(loc).value_or(false));
+      // Ensure the spot isn't occupied.
+      && !(board->get_value_at(loc).value_or(false));
   });
 }
 
@@ -120,7 +133,7 @@ Board::Board()
 auto Board::try_eliminate_rows() -> int
 {
   std::vector<int> complete_rows;
-  for (SDL_Point loc{0, 0}; loc.y < Board::height; loc.y++)
+  for (SDL_Point loc{ 0, 0 }; loc.y < Board::height; loc.y++)
   {
     bool row_has_empty_space = false;
     for (loc.x = 0; loc.x < Board::width; loc.x++)
@@ -142,29 +155,23 @@ auto Board::try_eliminate_rows() -> int
   if (!complete_rows.empty())
   {
     SDL_Point loc{};
-    for (const int &row_index : complete_rows)
+    for (const int& row_index : complete_rows)
     {
       loc.y = row_index;
-      const auto &row_start = data.begin() + location_to_index(loc);
+      const auto& row_start = data.begin() + location_to_index(loc);
       data.erase(row_start, row_start + Board::width);
     }
     // Fill in erased rows at the top to match the board dimensions.
     data.resize(Board::width * Board::height, false);
-
-    // Return how many rows were eliminated.
-    return complete_rows.size();
   }
-  else
-  {
-    // No rows were eliminated.
-    return 0;
-  }
+  // Return how many rows were eliminated.
+  return complete_rows.size();
 }
 
 void Board::tick(float delta_time)
 {
-  const auto &color =
-      game_mode->is_match_over ? foreground_color_alt : foreground_color;
+  const auto& color =
+    game_mode->is_match_over ? foreground_color_alt : foreground_color;
   SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
 
   int screen_w;
@@ -173,7 +180,8 @@ void Board::tick(float delta_time)
   const int right_edge = (screen_w - grid_size * width) / 2;
   const int bottom_edge = screen_h - right_edge / 2 + 40;
   SDL_Rect rect{
-      right_edge, bottom_edge, grid_size - padding, -(grid_size - padding * 2)};
+    right_edge, bottom_edge, grid_size - padding, -(grid_size - padding * 2)
+  };
 
   for (std::size_t i = 0; i < data.size(); i++)
   {
@@ -208,21 +216,21 @@ void Board::tick(float delta_time)
   SDL_RenderDrawRect(renderer, &rect);
 }
 
-void Board::stamp_values(const Piece &piece, const bool &new_value)
+void Board::stamp_values(const Piece& piece, const bool& new_value)
 {
-  for (const auto &p : piece.get_world_parts())
+  for (const auto& p : piece.get_world_parts())
   {
     set_value_at(p, new_value);
   }
 };
 
-[[nodiscard]] auto Board::location_to_index(const SDL_Point &loc) -> std::size_t
+[[nodiscard]] auto Board::location_to_index(const SDL_Point& loc) -> std::size_t
 {
   return static_cast<size_t>(loc.y * width + loc.x);
 }
 
-[[nodiscard]] auto Board::get_value_at(const SDL_Point &world_location) const
-    -> std::optional<bool>
+auto Board::get_value_at(const SDL_Point& world_location) const
+  -> std::optional<bool>
 {
   if (auto index = location_to_index(world_location); index < data.size())
   {
@@ -231,8 +239,8 @@ void Board::stamp_values(const Piece &piece, const bool &new_value)
   return {};
 }
 
-auto Board::set_value_at(const SDL_Point &world_location, const bool &new_value)
-    -> bool
+auto Board::set_value_at(const SDL_Point& world_location, const bool& new_value)
+  -> bool
 {
   if (auto index = location_to_index(world_location); index < data.size())
   {
@@ -272,21 +280,21 @@ void GameMode::handle_input()
 {
   // Collision testing is handled in `piece.add_offset` which will sweep until
   // it hits something.
-  auto &piece = player_piece.value();
-  const Uint8 *keyboard_state = SDL_GetKeyboardState(nullptr);
+  auto& piece = player_piece.value();
+  const Uint8* keyboard_state = SDL_GetKeyboardState(nullptr);
   if (keyboard_state[SDL_SCANCODE_DOWN] == 1)
   {
     // Drop lower if user holding down key but don't consider
     // as 'landed' from user down input.
-    piece.add_offset({0, -1});
+    piece.add_offset({ 0, -1 });
   }
   if (keyboard_state[SDL_SCANCODE_LEFT] == 1)
   {
-    piece.add_offset({-1, 0});
+    piece.add_offset({ -1, 0 });
   }
   else if (keyboard_state[SDL_SCANCODE_RIGHT] == 1)
   {
-    piece.add_offset({1, 0});
+    piece.add_offset({ 1, 0 });
   }
   else if (keyboard_state[SDL_SCANCODE_UP] == 1)
   {
@@ -315,7 +323,7 @@ void GameMode::handle_input()
 
 void GameMode::tick_current_piece(float delta_time)
 {
-  auto &piece = player_piece.value();
+  auto& piece = player_piece.value();
 
   // Reset previous piece state.
   board->stamp_values(piece, false);
@@ -326,7 +334,7 @@ void GameMode::tick_current_piece(float delta_time)
   if (current_fall_time > fall_delay)
   {
     current_fall_time = 0.F;
-    if (!piece.add_offset({0, -1}))
+    if (!piece.add_offset({ 0, -1 }))
     {
       has_landed = true;
     }
@@ -358,7 +366,7 @@ void GameMode::tick_current_piece(float delta_time)
   // End game if anything on the 4th row down is occupied.
   // I don't know if this is part of the official rules.
 
-  SDL_Point loc{0, Board::height - 4};
+  SDL_Point loc{ 0, Board::height - 4 };
   for (int i = 0; i < Board::width; i++)
   {
     loc.x = i;
@@ -404,8 +412,12 @@ void GameMode::tick(float delta_time)
 
 void main_loop()
 {
-  SDL_SetRenderDrawColor(renderer, background_color.r, background_color.g,
-      background_color.b, background_color.a);
+  SDL_SetRenderDrawColor(
+    renderer,
+    background_color.r,
+    background_color.g,
+    background_color.b,
+    background_color.a);
   SDL_RenderClear(renderer);
 
   float delta_time = 0.F;
@@ -429,12 +441,12 @@ void main_loop()
 }
 
 #undef main // from SDL2
-auto main(int argc, char *argv[]) -> int
+auto main(int argc, char* argv[]) -> int
 {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) == 0)
   {
     SDL_CreateWindowAndRenderer(
-        window_size.x, window_size.y, 0, &window, &renderer);
+      window_size.x, window_size.y, 0, &window, &renderer);
 
     board = std::make_unique<Board>();
     game_mode = std::make_unique<GameMode>();
