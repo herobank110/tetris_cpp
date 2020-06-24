@@ -31,254 +31,6 @@ SDL_Renderer *renderer;
 std::unique_ptr<class Board> board;
 std::unique_ptr<class GameMode> game_mode;
 
-class Actor
-{
-public:
-  void tick(float delta_time);
-};
-
-class Board : Actor
-{
-public:
-  Board()
-  {
-    data.reserve(width * height);
-    data.assign(width * height, false);
-  }
-
-  void tick(float delta_time)
-  {
-    const auto &color =
-        game_mode->is_match_over ? foreground_color_alt : foreground_color;
-    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-
-    int screen_w;
-    int screen_h;
-    SDL_GetWindowSize(window, &screen_w, &screen_h);
-    const int right_edge = (screen_w - grid_size * width) / 2;
-    const int bottom_edge = screen_h - right_edge / 2 + 40;
-    SDL_Rect rect{right_edge, bottom_edge, grid_size - padding,
-                  -(grid_size - padding * 2)};
-
-    for (std::size_t i = 0; i < data.size(); i++)
-    {
-      if (i != 0)
-      {
-        rect.x += grid_size;
-        if (i % width == 0)
-        {
-          // New row above.
-          rect.y -= grid_size;
-          rect.x = right_edge;
-        }
-      }
-
-      if (data[i])
-      {
-        rect.h--;
-        SDL_RenderFillRect(renderer, &rect);
-        rect.h++;
-      }
-      else
-      {
-        SDL_RenderDrawRect(renderer, &rect);
-      }
-    }
-
-    // Draw a border around the grid.
-    rect.x = right_edge - margin;
-    rect.y = bottom_edge + margin;
-    rect.w = grid_size * Board::width + margin * 2 - padding;
-    rect.h = -(grid_size * Board::height + margin * 2 - padding * 2);
-    SDL_RenderDrawRect(renderer, &rect);
-  }
-
-  void stamp_values(const Piece &piece, const bool new_value)
-  {
-    for (const auto &p : piece.get_world_parts())
-    {
-      set_value_at(p, new_value);
-    }
-  };
-
-  [[nodiscard]] static auto location_to_index(const Location &loc)
-      -> std::size_t
-  {
-    return loc.y * width + loc.x;
-  }
-
-  [[nodiscard]] auto get_value_at(const Location &world_location) const
-      -> std::optional<bool>
-  {
-    if (auto index = location_to_index(world_location); index < data.size())
-    {
-      return data[index];
-    }
-    return {};
-  }
-
-  auto set_value_at(const Location &world_location, const bool new_value)
-      -> bool
-  {
-    auto index = location_to_index(world_location);
-    if (index < data.size())
-    {
-      data[index] = new_value;
-      return true;
-    }
-    return false;
-  }
-
-  constexpr static const int width = 10;
-  constexpr static const int height = 21;
-  constexpr static const int grid_size = 22;
-  constexpr static const int padding = 2;
-  constexpr static const int margin = 4;
-  std::vector<bool> data;
-};
-
-class GameMode : Actor
-{
-public:
-  void choose_new_piece()
-  {
-    // Makes a copy to adjust world location on the member variable.
-    // player_piece = pieces[rand() % pieces.size()];
-    player_piece = pieces[0];
-
-    // Move to the top center of the board.
-    player_piece.value().location.x = Board::width / 2;
-    player_piece.value().location.y = Board::height;
-
-    // Shift down until not colliding.
-    while (player_piece.value().has_collision())
-    {
-      player_piece.value().location.y--;
-    }
-  }
-
-  void tick_new_piece(float delta_time)
-  {
-    current_new_piece_time += delta_time;
-    if (current_new_piece_time > new_piece_delay)
-    {
-      current_new_piece_time = 0.F;
-      choose_new_piece();
-    }
-  }
-
-  void tick_current_piece(float delta_time)
-  {
-    auto &piece = player_piece.value();
-
-    // Reset previous piece state.
-    board->stamp_values(piece, false);
-
-    bool has_landed = false;
-    // Fall automatically after a repeat delay.
-    current_fall_time += delta_time;
-    if (current_fall_time > fall_delay)
-    {
-      current_fall_time = 0.F;
-      if (!piece.add_offset({0, -1}))
-      {
-        has_landed = true;
-      }
-    }
-
-    const Uint8 *state = SDL_GetKeyboardState(nullptr);
-    if (state[SDL_SCANCODE_DOWN] == 1)
-    {
-      // Drop lower if user holding down key but don't consider
-      // as 'landed' from user down input.
-      piece.add_offset({0, -1});
-    }
-    if (piece.location.x > 0 && state[SDL_SCANCODE_LEFT] == 1)
-    {
-      piece.add_offset({-1, 0});
-    }
-    else if (piece.location.x < Board::width - 1 &&
-             state[SDL_SCANCODE_RIGHT] == 1)
-    {
-      piece.add_offset({1, 0});
-    }
-    // TODO: Piece rotation
-
-    if (has_landed)
-    {
-      // This time the player landed on an occupied spot.
-
-      // Set final state on board.
-      board->stamp_values(piece, true);
-      player_piece.reset();
-      board->tick(delta_time);
-    }
-    else
-    {
-      // Set new state on board.
-      board->stamp_values(piece, true);
-      // Draw board then clear temporary values.
-      board->tick(delta_time);
-      board->stamp_values(piece, false);
-    }
-  }
-
-  auto can_end_match() const -> bool
-  {
-    // End game if anything on the 4th row down is occupied.
-    // I don't know if this is part of the official rules.
-
-    Location loc{0, Board::height - 4};
-    for (int i = 0; i < Board::width; i++)
-    {
-      loc.x = i;
-      if (board->get_value_at(loc).value_or(false))
-      {
-        // A spot is occupied, so we can end the game.
-        return true;
-      }
-    }
-    // Nothing on this row was occupied, so continue play.
-    return false;
-  }
-
-  void tick(float delta_time)
-  {
-    if (is_match_over)
-    {
-      board->tick(delta_time);
-
-      return;
-    }
-    if (can_end_match())
-    {
-      is_match_over = true;
-      return;
-    }
-
-    if (player_piece.has_value())
-    {
-      // Otherwise move the current piece.
-      tick_current_piece(delta_time);
-    }
-    else
-    {
-      // Try to give the player a new piece.
-      tick_new_piece(delta_time);
-      // TODO: Fix temporary player piece marker on board so board state
-      // doesn't have actually be adjusted for game logic.
-      board->tick(delta_time);
-    }
-  }
-
-  constexpr const static float fall_delay = 1.F;
-  constexpr const static float new_piece_delay = 1.5F;
-  float current_fall_time = 0.F;
-  float current_new_piece_time = 0.F;
-  std::optional<Piece> player_piece;
-  bool is_match_over = false;
-};
-
 [[nodiscard]] auto Piece::has_collision() const -> bool
 {
   auto parts = get_world_parts();
@@ -291,6 +43,270 @@ public:
         // Ensure the spot isn't occupied.
         && !(board->get_value_at(loc).value_or(false));
   });
+}
+
+Board::Board()
+{
+  data.reserve(width * height);
+  data.assign(width * height, false);
+}
+
+auto Board::try_eliminate_rows() -> int
+{
+  std::vector<int> complete_rows;
+  for (Location loc{0, 0}; loc.y < Board::height; loc.y++)
+  {
+    bool row_has_empty_space = false;
+    for (loc.x = 0; loc.x < Board::width; loc.x++)
+    {
+      if (!get_value_at(loc).value_or(false))
+      {
+        row_has_empty_space = true;
+        break;
+      }
+    }
+    if (!row_has_empty_space)
+    {
+      // Mark this row to be eliminated.
+      complete_rows.push_back(loc.y);
+    }
+  }
+
+  // Eliminate the rows.
+  if (!complete_rows.empty())
+  {
+    Location loc;
+    for (const int &row_index : complete_rows)
+    {
+      loc.y = row_index;
+      const auto &row_start = data.begin() + location_to_index(loc);
+      data.erase(row_start, row_start + Board::width);
+    }
+    // Fill in erased rows at the top to match the board dimensions.
+    data.resize(Board::width * Board::height, false);
+
+    // Return how many rows were eliminated.
+    return complete_rows.size();
+  }
+  else
+  {
+    // No rows were eliminated.
+    return 0;
+  }
+}
+
+void Board::tick(float delta_time)
+{
+  const auto &color =
+      game_mode->is_match_over ? foreground_color_alt : foreground_color;
+  SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+
+  int screen_w;
+  int screen_h;
+  SDL_GetWindowSize(window, &screen_w, &screen_h);
+  const int right_edge = (screen_w - grid_size * width) / 2;
+  const int bottom_edge = screen_h - right_edge / 2 + 40;
+  SDL_Rect rect{right_edge, bottom_edge, grid_size - padding,
+                -(grid_size - padding * 2)};
+
+  for (std::size_t i = 0; i < data.size(); i++)
+  {
+    if (i != 0)
+    {
+      rect.x += grid_size;
+      if (i % width == 0)
+      {
+        // New row above.
+        rect.y -= grid_size;
+        rect.x = right_edge;
+      }
+    }
+
+    if (data[i])
+    {
+      rect.h--;
+      SDL_RenderFillRect(renderer, &rect);
+      rect.h++;
+    }
+    else
+    {
+      SDL_RenderDrawRect(renderer, &rect);
+    }
+  }
+
+  // Draw a border around the grid.
+  rect.x = right_edge - margin;
+  rect.y = bottom_edge + margin;
+  rect.w = grid_size * Board::width + margin * 2 - padding;
+  rect.h = -(grid_size * Board::height + margin * 2 - padding * 2);
+  SDL_RenderDrawRect(renderer, &rect);
+}
+
+void Board::stamp_values(const Piece &piece, const bool new_value)
+{
+  for (const auto &p : piece.get_world_parts())
+  {
+    set_value_at(p, new_value);
+  }
+};
+
+[[nodiscard]] auto Board::location_to_index(const Location &loc)
+    -> std::size_t
+{
+  return loc.y * width + loc.x;
+}
+
+[[nodiscard]] auto Board::get_value_at(const Location &world_location) const
+    -> std::optional<bool>
+{
+  if (auto index = location_to_index(world_location); index < data.size())
+  {
+    return data[index];
+  }
+  return {};
+}
+
+auto Board::set_value_at(const Location &world_location, const bool new_value)
+    -> bool
+{
+  auto index = location_to_index(world_location);
+  if (index < data.size())
+  {
+    data[index] = new_value;
+    return true;
+  }
+  return false;
+}
+
+void GameMode::choose_new_piece()
+{
+  // Makes a copy to adjust world location on the member variable.
+  // player_piece = pieces[rand() % pieces.size()];
+  player_piece = pieces[0];
+
+  // Move to the top center of the board.
+  player_piece.value().location.x = Board::width / 2;
+  player_piece.value().location.y = Board::height;
+
+  // Shift down until not colliding.
+  while (player_piece.value().has_collision())
+  {
+    player_piece.value().location.y--;
+  }
+}
+
+void GameMode::tick_new_piece(float delta_time)
+{
+  current_new_piece_time += delta_time;
+  if (current_new_piece_time > new_piece_delay)
+  {
+    current_new_piece_time = 0.F;
+    choose_new_piece();
+  }
+}
+
+void GameMode::tick_current_piece(float delta_time)
+{
+  auto &piece = player_piece.value();
+
+  // Reset previous piece state.
+  board->stamp_values(piece, false);
+
+  bool has_landed = false;
+  // Fall automatically after a repeat delay.
+  current_fall_time += delta_time;
+  if (current_fall_time > fall_delay)
+  {
+    current_fall_time = 0.F;
+    if (!piece.add_offset({0, -1}))
+    {
+      has_landed = true;
+    }
+  }
+
+  const Uint8 *state = SDL_GetKeyboardState(nullptr);
+  if (state[SDL_SCANCODE_DOWN] == 1)
+  {
+    // Drop lower if user holding down key but don't consider
+    // as 'landed' from user down input.
+    piece.add_offset({0, -1});
+  }
+  if (piece.location.x > 0 && state[SDL_SCANCODE_LEFT] == 1)
+  {
+    piece.add_offset({-1, 0});
+  }
+  else if (piece.location.x < Board::width - 1 &&
+           state[SDL_SCANCODE_RIGHT] == 1)
+  {
+    piece.add_offset({1, 0});
+  }
+  // TODO: Piece rotation
+
+  if (has_landed)
+  {
+    // This time the player landed on an occupied spot.
+
+    // Set final state on board.
+    board->stamp_values(piece, true);
+    player_piece.reset();
+    board->tick(delta_time);
+  }
+  else
+  {
+    // Set new state on board.
+    board->stamp_values(piece, true);
+    // Draw board then clear temporary values.
+    board->tick(delta_time);
+    board->stamp_values(piece, false);
+  }
+}
+
+auto GameMode::can_end_match() const -> bool
+{
+  // End game if anything on the 4th row down is occupied.
+  // I don't know if this is part of the official rules.
+
+  Location loc{0, Board::height - 4};
+  for (int i = 0; i < Board::width; i++)
+  {
+    loc.x = i;
+    if (board->get_value_at(loc).value_or(false))
+    {
+      // A spot is occupied, so we can end the game.
+      return true;
+    }
+  }
+  // Nothing on this row was occupied, so continue play.
+  return false;
+}
+
+void GameMode::tick(float delta_time)
+{
+  if (is_match_over)
+  {
+    board->tick(delta_time);
+
+    return;
+  }
+  if (can_end_match())
+  {
+    is_match_over = true;
+    return;
+  }
+
+  if (player_piece.has_value())
+  {
+    // Otherwise move the current piece.
+    tick_current_piece(delta_time);
+  }
+  else
+  {
+    // Try to give the player a new piece.
+    tick_new_piece(delta_time);
+    // TODO: Fix temporary player piece marker on board so board state
+    // doesn't have actually be adjusted for game logic.
+    board->tick(delta_time);
+  }
 }
 
 void main_loop()
