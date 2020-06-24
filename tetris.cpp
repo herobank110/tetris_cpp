@@ -23,7 +23,9 @@ static const Location window_size{800, 600};
 static const Color background_color{255};
 static const Color foreground_color{113, 150, 107};
 static const Color foreground_color_alt{150, 113, 97};
-static const std::array pieces{Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
+static const std::array pieces{Piece{{{0, 0}, {0, 1}, {1, 1}, {0, 2}}},
+                               Piece{{{0, 0}, {1, 0}, {1, -1}, {2, -1}}},
+                               Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
                                Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
                                Piece{{{0, 0}, {1, 0}, {1, 1}, {2, 1}}}};
 
@@ -201,7 +203,7 @@ void Board::stamp_values(const Piece &piece, const bool new_value)
 
 [[nodiscard]] auto Board::location_to_index(const Location &loc) -> std::size_t
 {
-  return loc.y * width + loc.x;
+  return static_cast<size_t>(loc.y * width + loc.x);
 }
 
 [[nodiscard]] auto Board::get_value_at(const Location &world_location) const
@@ -229,8 +231,7 @@ auto Board::set_value_at(const Location &world_location, const bool new_value)
 void GameMode::choose_new_piece()
 {
   // Makes a copy to adjust world location on the member variable.
-  // player_piece = pieces[rand() % pieces.size()];
-  player_piece = pieces[0];
+  player_piece = pieces[rand() % pieces.size()];
 
   // Move to the top center of the board.
   player_piece.value().location.x = Board::width / 2;
