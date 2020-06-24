@@ -141,7 +141,7 @@ auto Board::try_eliminate_rows() -> int
   // Eliminate the rows.
   if (!complete_rows.empty())
   {
-    SDL_Point loc;
+    SDL_Point loc{};
     for (const int &row_index : complete_rows)
     {
       loc.y = row_index;
