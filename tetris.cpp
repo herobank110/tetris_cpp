@@ -22,6 +22,7 @@ static const int fps = 20;
 static const Location window_size{800, 600};
 static const Color background_color{255};
 static const Color foreground_color{113, 150, 107};
+static const Color foreground_color_alt{150, 113, 97};
 static const std::array pieces{Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
                                Piece{{{0, 0}, {1, 0}, {1, 1}, {2, 1}}}};
 
@@ -47,9 +48,9 @@ public:
 
   void tick(float delta_time)
   {
-
-    SDL_SetRenderDrawColor(renderer, foreground_color.r, foreground_color.g,
-                           foreground_color.b, foreground_color.a);
+    const auto &color =
+        game_mode->is_match_over ? foreground_color_alt : foreground_color;
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
 
     int screen_w;
     int screen_h;
@@ -210,10 +211,16 @@ public:
       // Set final state on board.
       board->stamp_values(piece, true);
       player_piece.reset();
+      board->tick(delta_time);
     }
-
-    // Set new state on board.
-    board->stamp_values(piece, true);
+    else
+    {
+      // Set new state on board.
+      board->stamp_values(piece, true);
+      // Draw board then clear temporary values.
+      board->tick(delta_time);
+      board->stamp_values(piece, false);
+    }
   }
 
   auto can_end_match() const -> bool
@@ -224,6 +231,7 @@ public:
     Location loc{0, Board::height - 4};
     for (int i = 0; i < Board::width; i++)
     {
+      loc.x = i;
       if (board->get_value_at(loc).value_or(false))
       {
         // A spot is occupied, so we can end the game.
@@ -238,6 +246,8 @@ public:
   {
     if (is_match_over)
     {
+      board->tick(delta_time);
+
       return;
     }
     if (can_end_match())
@@ -255,6 +265,9 @@ public:
     {
       // Try to give the player a new piece.
       tick_new_piece(delta_time);
+      // TODO: Fix temporary player piece marker on board so board state
+      // doesn't have actually be adjusted for game logic.
+      board->tick(delta_time);
     }
   }
 
@@ -301,7 +314,6 @@ void main_loop()
   last_time = time_now;
 #endif
 
-  board->tick(delta_time);
   game_mode->tick(delta_time);
 
   SDL_RenderPresent(renderer);
