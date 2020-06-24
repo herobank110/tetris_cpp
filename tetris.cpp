@@ -23,15 +23,62 @@ static const Location window_size{800, 600};
 static const Color background_color{255};
 static const Color foreground_color{113, 150, 107};
 static const Color foreground_color_alt{150, 113, 97};
-static const std::array pieces{
-    Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
-    Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
+static const std::array pieces{Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
+                               Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
                                Piece{{{0, 0}, {1, 0}, {1, 1}, {2, 1}}}};
 
-SDL_Window *window;
-SDL_Renderer *renderer;
-std::unique_ptr<class Board> board;
-std::unique_ptr<class GameMode> game_mode;
+static SDL_Window *window;
+static SDL_Renderer *renderer;
+static std::unique_ptr<class Board> board;
+static std::unique_ptr<class GameMode> game_mode;
+
+Piece::Piece(std::initializer_list<Location> &&t) noexcept
+    : parts{std::make_shared<std::vector<Location>>(std::move(t))}
+{
+}
+
+[[nodiscard]] auto Piece::get_world_parts() const
+{
+  std::vector<Location> vec{};
+  vec.reserve(parts->size());
+  std::transform(parts->begin(), parts->end(), std::back_inserter(vec),
+                 [this](const Location &p) {
+                   return Location{p.x + location.x, p.y + location.y};
+                 });
+  return vec;
+}
+
+auto Piece::add_offset(Location offset) -> bool
+{
+  const Location sweep{offset.x < 0 ? -1 : offset.x > 0 ? 1 : 0,
+                       offset.y < 0 ? -1 : offset.y > 0 ? 1 : 0};
+
+  while (!(offset.x == 0 && offset.y == 0))
+  {
+    if (sweep.x != 0)
+    {
+      location.x += sweep.x;
+      if (has_collision())
+      {
+        location.x -= sweep.x;
+        return false;
+      }
+      offset.x -= sweep.x;
+    }
+
+    if (sweep.y != 0)
+    {
+      location.y += sweep.y;
+      if (has_collision())
+      {
+        location.y -= sweep.y;
+        return false;
+      }
+      offset.y -= sweep.y;
+    }
+  }
+  return true;
+};
 
 [[nodiscard]] auto Piece::has_collision() const -> bool
 {
@@ -152,8 +199,7 @@ void Board::stamp_values(const Piece &piece, const bool new_value)
   }
 };
 
-[[nodiscard]] auto Board::location_to_index(const Location &loc)
-    -> std::size_t
+[[nodiscard]] auto Board::location_to_index(const Location &loc) -> std::size_t
 {
   return loc.y * width + loc.x;
 }
