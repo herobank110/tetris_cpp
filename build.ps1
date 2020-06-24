@@ -1,2 +1,3 @@
-if (!(Test-Path Web)) { New-Item Web -ItemType Directory }
-em++ .\tetris.cpp -s WASM=1 -o Web/index.html -s USE_SDL=2 -std=c++17 -Wall -Wextra
+em++ .\tetris.cpp -s WASM=1 -o index.html -s USE_SDL=2 -std=c++17
+# --shell-file  ..\my_template.html 
+# -s NO_EXIT_RUNTIME=1 -s "EXTRA_EXPORTED_RUNTIME_METHODS=['ccall']"
