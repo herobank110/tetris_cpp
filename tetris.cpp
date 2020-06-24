@@ -290,13 +290,26 @@ void GameMode::handle_input()
   }
   else if (keyboard_state[SDL_SCANCODE_UP] == 1)
   {
+    auto try_loop_rotation = [&] {
+      if (piece.rotation < 0)
+      {
+        piece.rotation = 3;
+      }
+      else if (piece.rotation > 3)
+      {
+        // Loop back round as 4 * 90 degrees is a full turn.
+        piece.rotation = 0;
+      }
+    };
+
     piece.rotation += 1;
-    if (piece.rotation == 4)
+    try_loop_rotation();
+    if (piece.has_collision())
     {
-      // Loop back round as 4 * 90 degrees is a full turn.
-      piece.rotation = 0;
+      piece.rotation -= 1;
     }
-    std::cout << "Rotation: " << piece.rotation << std::endl;
+    // Loop back round if collided and lowered rotations.
+    try_loop_rotation();
   }
 }
 
