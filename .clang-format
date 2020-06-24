@@ -1,6 +1,8 @@
 # Format Style Options - Created with Clang Power Tools
 ---
 Language: Cpp
+AlignAfterOpenBracket: DontAlign
 AlignEscapedNewlines: Right
+AllowShortCaseLabelsOnASingleLine: true
 BreakBeforeBraces: Allman
 ...

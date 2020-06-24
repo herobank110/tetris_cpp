@@ -3,6 +3,7 @@
 //    Down Arrow - Move Down
 //    Left Arrow - Move Left
 //    Right Arrow - Move Right
+//    Up Arrow - Rotate
 
 #include <SDL2/SDL.h>
 #include <array>
@@ -24,10 +25,10 @@ static const SDL_Color background_color{255, 255, 255, 255};
 static const SDL_Color foreground_color{113, 150, 107, 255};
 static const SDL_Color foreground_color_alt{150, 113, 97, 255};
 static const std::array pieces{Piece{{{0, 0}, {0, 1}, {1, 1}, {0, 2}}},
-                               Piece{{{0, 0}, {1, 0}, {1, -1}, {2, -1}}},
-                               Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
-                               Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
-                               Piece{{{0, 0}, {1, 0}, {1, 1}, {2, 1}}}};
+    Piece{{{0, 0}, {1, 0}, {1, -1}, {2, -1}}},
+    Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
+    Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
+    Piece{{{0, 0}, {1, 0}, {1, 1}, {2, 1}}}};
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
@@ -44,16 +45,30 @@ Piece::Piece(std::initializer_list<SDL_Point> &&t) noexcept
   std::vector<SDL_Point> vec{};
   vec.reserve(parts->size());
   std::transform(parts->begin(), parts->end(), std::back_inserter(vec),
-                 [this](const SDL_Point &p) {
-                   return SDL_Point{p.x + location.x, p.y + location.y};
-                 });
+      [this](const SDL_Point &p) {
+        // Apply rotation to reference piece.
+        SDL_Point loc;
+        switch (rotation)
+        {
+        case 0: loc = {p.x, p.y}; break;
+        case 1: loc = {p.y, -p.x}; break;
+        case 2: loc = {-p.x, -p.y}; break;
+        case 3: loc = {-p.y, p.x}; break;
+        default: throw std::runtime_error("Rotation must be between 0 and 3");
+        };
+
+        // Add world origin offset.
+        loc.x += location.x;
+        loc.y += location.y;
+        return loc;
+      });
   return vec;
 }
 
 auto Piece::add_offset(SDL_Point offset) -> bool
 {
   const SDL_Point sweep{offset.x < 0 ? -1 : offset.x > 0 ? 1 : 0,
-                       offset.y < 0 ? -1 : offset.y > 0 ? 1 : 0};
+      offset.y < 0 ? -1 : offset.y > 0 ? 1 : 0};
 
   while (!(offset.x == 0 && offset.y == 0))
   {
@@ -157,8 +172,8 @@ void Board::tick(float delta_time)
   SDL_GetWindowSize(window, &screen_w, &screen_h);
   const int right_edge = (screen_w - grid_size * width) / 2;
   const int bottom_edge = screen_h - right_edge / 2 + 40;
-  SDL_Rect rect{right_edge, bottom_edge, grid_size - padding,
-                -(grid_size - padding * 2)};
+  SDL_Rect rect{
+      right_edge, bottom_edge, grid_size - padding, -(grid_size - padding * 2)};
 
   for (std::size_t i = 0; i < data.size(); i++)
   {
@@ -253,6 +268,38 @@ void GameMode::tick_new_piece(float delta_time)
   }
 }
 
+void GameMode::handle_input()
+{
+  // Collision testing is handled in `piece.add_offset` which will sweep until
+  // it hits something.
+  auto &piece = player_piece.value();
+  const Uint8 *keyboard_state = SDL_GetKeyboardState(nullptr);
+  if (keyboard_state[SDL_SCANCODE_DOWN] == 1)
+  {
+    // Drop lower if user holding down key but don't consider
+    // as 'landed' from user down input.
+    piece.add_offset({0, -1});
+  }
+  if (keyboard_state[SDL_SCANCODE_LEFT] == 1)
+  {
+    piece.add_offset({-1, 0});
+  }
+  else if (keyboard_state[SDL_SCANCODE_RIGHT] == 1)
+  {
+    piece.add_offset({1, 0});
+  }
+  else if (keyboard_state[SDL_SCANCODE_UP] == 1)
+  {
+    piece.rotation += 1;
+    if (piece.rotation == 4)
+    {
+      // Loop back round as 4 * 90 degrees is a full turn.
+      piece.rotation = 0;
+    }
+    std::cout << "Rotation: " << piece.rotation << std::endl;
+  }
+}
+
 void GameMode::tick_current_piece(float delta_time)
 {
   auto &piece = player_piece.value();
@@ -272,23 +319,7 @@ void GameMode::tick_current_piece(float delta_time)
     }
   }
 
-  const Uint8 *state = SDL_GetKeyboardState(nullptr);
-  if (state[SDL_SCANCODE_DOWN] == 1)
-  {
-    // Drop lower if user holding down key but don't consider
-    // as 'landed' from user down input.
-    piece.add_offset({0, -1});
-  }
-  if (piece.location.x > 0 && state[SDL_SCANCODE_LEFT] == 1)
-  {
-    piece.add_offset({-1, 0});
-  }
-  else if (piece.location.x < Board::width - 1 &&
-           state[SDL_SCANCODE_RIGHT] == 1)
-  {
-    piece.add_offset({1, 0});
-  }
-  // TODO: Piece rotation
+  handle_input();
 
   if (has_landed)
   {
@@ -361,7 +392,7 @@ void GameMode::tick(float delta_time)
 void main_loop()
 {
   SDL_SetRenderDrawColor(renderer, background_color.r, background_color.g,
-                         background_color.b, background_color.a);
+      background_color.b, background_color.a);
   SDL_RenderClear(renderer);
 
   float delta_time = 0.F;
@@ -389,8 +420,8 @@ auto main(int argc, char *argv[]) -> int
 {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) == 0)
   {
-    SDL_CreateWindowAndRenderer(window_size.x, window_size.y, 0, &window,
-                                &renderer);
+    SDL_CreateWindowAndRenderer(
+        window_size.x, window_size.y, 0, &window, &renderer);
 
     board = std::make_unique<Board>();
     game_mode = std::make_unique<GameMode>();

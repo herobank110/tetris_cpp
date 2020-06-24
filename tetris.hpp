@@ -25,12 +25,12 @@ public:
   Board();
   auto try_eliminate_rows() -> int;
   void tick(float delta_time);
-  void stamp_values(const Piece &piece, const bool& new_value);
+  void stamp_values(const Piece &piece, const bool &new_value);
   [[nodiscard]] static auto location_to_index(const SDL_Point &loc)
       -> std::size_t;
   [[nodiscard]] auto get_value_at(const SDL_Point &world_location) const
       -> std::optional<bool>;
-  auto set_value_at(const SDL_Point &world_location, const bool& new_value)
+  auto set_value_at(const SDL_Point &world_location, const bool &new_value)
       -> bool;
 
   constexpr static const int width = 10;
@@ -47,6 +47,7 @@ public:
   void choose_new_piece();
   [[nodiscard]] auto can_end_match() const -> bool;
   void tick_new_piece(float delta_time);
+  void handle_input();
   void tick_current_piece(float delta_time);
   void tick(float delta_time);
 
