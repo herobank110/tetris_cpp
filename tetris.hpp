@@ -1,36 +1,16 @@
 #pragma once
 
-struct Location
-{
-  int x = 0, y = 0;
-  Location() noexcept = default;
-  Location(int x, int y) noexcept : x(x), y(y){};
-};
-
-struct Color
-{
-  Uint8 r = 0, g = 0, b = 0, a = std::numeric_limits<Uint8>::max();
-  Color() noexcept = default;
-  explicit Color(const Uint8 v) noexcept
-      : r(v), g(v), b(v), a(std::numeric_limits<Uint8>::max())
-  {
-  }
-  Color(const Uint8 r, const Uint8 g, const Uint8 b) noexcept
-      : r(r), g(g), b(b), a(std::numeric_limits<Uint8>::max())
-  {
-  }
-};
-
 struct Piece
 {
-  explicit Piece(std::initializer_list<Location> &&t) noexcept;
+  explicit Piece(std::initializer_list<SDL_Point> &&t) noexcept;
   [[nodiscard]] auto get_world_parts() const;
   // Sweep to apply a position offset and stop if collision occurs.
-  auto add_offset(Location offset) -> bool;
+  auto add_offset(SDL_Point offset) -> bool;
   [[nodiscard]] auto has_collision() const -> bool;
 
-  std::shared_ptr<std::vector<Location>> parts;
-  Location location{0, 0};
+  std::shared_ptr<std::vector<SDL_Point>> parts;
+  SDL_Point location{0, 0};
+  int rotation = 0;
 };
 
 class Actor
@@ -45,12 +25,12 @@ public:
   Board();
   auto try_eliminate_rows() -> int;
   void tick(float delta_time);
-  void stamp_values(const Piece &piece, const bool new_value);
-  [[nodiscard]] static auto location_to_index(const Location &loc)
+  void stamp_values(const Piece &piece, const bool& new_value);
+  [[nodiscard]] static auto location_to_index(const SDL_Point &loc)
       -> std::size_t;
-  [[nodiscard]] auto get_value_at(const Location &world_location) const
+  [[nodiscard]] auto get_value_at(const SDL_Point &world_location) const
       -> std::optional<bool>;
-  auto set_value_at(const Location &world_location, const bool new_value)
+  auto set_value_at(const SDL_Point &world_location, const bool& new_value)
       -> bool;
 
   constexpr static const int width = 10;
@@ -65,7 +45,7 @@ class GameMode : Actor
 {
 public:
   void choose_new_piece();
-  auto can_end_match() const -> bool;
+  [[nodiscard]] auto can_end_match() const -> bool;
   void tick_new_piece(float delta_time);
   void tick_current_piece(float delta_time);
   void tick(float delta_time);

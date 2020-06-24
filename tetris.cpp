@@ -19,10 +19,10 @@
 #include "tetris.hpp"
 
 static const int fps = 20;
-static const Location window_size{800, 600};
-static const Color background_color{255};
-static const Color foreground_color{113, 150, 107};
-static const Color foreground_color_alt{150, 113, 97};
+static const SDL_Point window_size{800, 600};
+static const SDL_Color background_color{255, 255, 255, 255};
+static const SDL_Color foreground_color{113, 150, 107, 255};
+static const SDL_Color foreground_color_alt{150, 113, 97, 255};
 static const std::array pieces{Piece{{{0, 0}, {0, 1}, {1, 1}, {0, 2}}},
                                Piece{{{0, 0}, {1, 0}, {1, -1}, {2, -1}}},
                                Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
@@ -34,25 +34,25 @@ static SDL_Renderer *renderer;
 static std::unique_ptr<class Board> board;
 static std::unique_ptr<class GameMode> game_mode;
 
-Piece::Piece(std::initializer_list<Location> &&t) noexcept
-    : parts{std::make_shared<std::vector<Location>>(std::move(t))}
+Piece::Piece(std::initializer_list<SDL_Point> &&t) noexcept
+    : parts{std::make_shared<std::vector<SDL_Point>>(std::move(t))}
 {
 }
 
 [[nodiscard]] auto Piece::get_world_parts() const
 {
-  std::vector<Location> vec{};
+  std::vector<SDL_Point> vec{};
   vec.reserve(parts->size());
   std::transform(parts->begin(), parts->end(), std::back_inserter(vec),
-                 [this](const Location &p) {
-                   return Location{p.x + location.x, p.y + location.y};
+                 [this](const SDL_Point &p) {
+                   return SDL_Point{p.x + location.x, p.y + location.y};
                  });
   return vec;
 }
 
-auto Piece::add_offset(Location offset) -> bool
+auto Piece::add_offset(SDL_Point offset) -> bool
 {
-  const Location sweep{offset.x < 0 ? -1 : offset.x > 0 ? 1 : 0,
+  const SDL_Point sweep{offset.x < 0 ? -1 : offset.x > 0 ? 1 : 0,
                        offset.y < 0 ? -1 : offset.y > 0 ? 1 : 0};
 
   while (!(offset.x == 0 && offset.y == 0))
@@ -85,7 +85,7 @@ auto Piece::add_offset(Location offset) -> bool
 [[nodiscard]] auto Piece::has_collision() const -> bool
 {
   auto parts = get_world_parts();
-  return !std::all_of(parts.begin(), parts.end(), [](const Location &loc) {
+  return !std::all_of(parts.begin(), parts.end(), [](const SDL_Point &loc) {
     return
         // Ensure the piece is within the board bounds.
         0 <= loc.x && loc.x < Board::width && 0 <= loc.y &&
@@ -105,7 +105,7 @@ Board::Board()
 auto Board::try_eliminate_rows() -> int
 {
   std::vector<int> complete_rows;
-  for (Location loc{0, 0}; loc.y < Board::height; loc.y++)
+  for (SDL_Point loc{0, 0}; loc.y < Board::height; loc.y++)
   {
     bool row_has_empty_space = false;
     for (loc.x = 0; loc.x < Board::width; loc.x++)
@@ -126,7 +126,7 @@ auto Board::try_eliminate_rows() -> int
   // Eliminate the rows.
   if (!complete_rows.empty())
   {
-    Location loc;
+    SDL_Point loc;
     for (const int &row_index : complete_rows)
     {
       loc.y = row_index;
@@ -193,7 +193,7 @@ void Board::tick(float delta_time)
   SDL_RenderDrawRect(renderer, &rect);
 }
 
-void Board::stamp_values(const Piece &piece, const bool new_value)
+void Board::stamp_values(const Piece &piece, const bool &new_value)
 {
   for (const auto &p : piece.get_world_parts())
   {
@@ -201,12 +201,12 @@ void Board::stamp_values(const Piece &piece, const bool new_value)
   }
 };
 
-[[nodiscard]] auto Board::location_to_index(const Location &loc) -> std::size_t
+[[nodiscard]] auto Board::location_to_index(const SDL_Point &loc) -> std::size_t
 {
   return static_cast<size_t>(loc.y * width + loc.x);
 }
 
-[[nodiscard]] auto Board::get_value_at(const Location &world_location) const
+[[nodiscard]] auto Board::get_value_at(const SDL_Point &world_location) const
     -> std::optional<bool>
 {
   if (auto index = location_to_index(world_location); index < data.size())
@@ -216,11 +216,10 @@ void Board::stamp_values(const Piece &piece, const bool new_value)
   return {};
 }
 
-auto Board::set_value_at(const Location &world_location, const bool new_value)
+auto Board::set_value_at(const SDL_Point &world_location, const bool &new_value)
     -> bool
 {
-  auto index = location_to_index(world_location);
-  if (index < data.size())
+  if (auto index = location_to_index(world_location); index < data.size())
   {
     data[index] = new_value;
     return true;
@@ -310,12 +309,12 @@ void GameMode::tick_current_piece(float delta_time)
   }
 }
 
-auto GameMode::can_end_match() const -> bool
+[[nodiscard]] auto GameMode::can_end_match() const -> bool
 {
   // End game if anything on the 4th row down is occupied.
   // I don't know if this is part of the official rules.
 
-  Location loc{0, Board::height - 4};
+  SDL_Point loc{0, Board::height - 4};
   for (int i = 0; i < Board::width; i++)
   {
     loc.x = i;
