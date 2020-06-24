@@ -435,7 +435,7 @@ void main_loop()
 }
 
 #undef main // from SDL2
-auto main(int argc, char* argv[]) -> int
+auto main() -> int
 {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) == 0)
   {
