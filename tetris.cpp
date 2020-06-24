@@ -23,7 +23,9 @@ static const Location window_size{800, 600};
 static const Color background_color{255};
 static const Color foreground_color{113, 150, 107};
 static const Color foreground_color_alt{150, 113, 97};
-static const std::array pieces{Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
+static const std::array pieces{
+    Piece{{{0, 0}, {0, 1}, {1, 0}, {1, 1}}},
+    Piece{{{0, 0}, {0, 1}, {0, 2}, {0, 3}}},
                                Piece{{{0, 0}, {1, 0}, {1, 1}, {2, 1}}}};
 
 SDL_Window *window;
@@ -297,6 +299,7 @@ void GameMode::tick(float delta_time)
   if (player_piece.has_value())
   {
     // Otherwise move the current piece.
+    board->try_eliminate_rows();
     tick_current_piece(delta_time);
   }
   else
